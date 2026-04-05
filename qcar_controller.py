@@ -52,14 +52,13 @@ CONFIG_FILE = CONFIG_DIR / "controller_mapping.json"
 CIRCUIT_FILE = CONFIG_DIR / "circuits.json"
 
 DEFAULT_MAPPING = {
-    "forward":       {"type": "button", "index": 5,  "label": "R1"},
-    "backward":      {"type": "button", "index": 4,  "label": "L1"},
-    "left":          {"type": "axis",   "index": 0,  "direction": -1, "threshold": 0.5, "label": "Stick L izq"},
-    "right":         {"type": "axis",   "index": 0,  "direction": 1,  "threshold": 0.5, "label": "Stick L der"},
-    "turbo_toggle":  {"type": "button", "index": 1,  "label": "X / A"},
-    "turbo_hold":    {"type": "button", "index": 3,  "label": "Triangle / Y"},
-    "lights_toggle": {"type": "button", "index": 2,  "label": "O / B"},
-    "exit":          {"type": "button", "index": 12, "label": "PS / Home"},
+    "forward":       {"type": "button", "index": 0,  "label": "X (Cruz)"},
+    "backward":      {"type": "button", "index": 12, "label": "D-Pad Abajo"},
+    "left":          {"type": "button", "index": 13, "label": "D-Pad Izq"},
+    "right":         {"type": "button", "index": 14, "label": "D-Pad Der"},
+    "turbo_toggle":  {"type": "button", "index": 3,  "label": "Triangle"},
+    "turbo_hold":    {"type": "button", "index": 11, "label": "D-Pad Arriba"},
+    "lights_toggle": {"type": "button", "index": 2,  "label": "Square"},
 }
 
 def load_mapping():
@@ -120,6 +119,7 @@ class QCARApp(ctk.CTk):
         self.joystick_index = 0
         self.sending = False
         self.prev_buttons = {}
+        self._joy_count = 0
 
         # Autopilot
         self.autopilot_running = False
@@ -130,17 +130,22 @@ class QCARApp(ctk.CTk):
         pygame.joystick.init()
 
         self._build_ui()
-        self._refresh_joystick_list()
 
+        # Init joysticks directly on startup
+        self.after(500, self._startup_joystick_scan)
         self.after(16, self._poll_gamepad)
-        self.after(2000, self._periodic_joystick_check)
+        self.after(3000, self._periodic_joystick_check)
+
+    def _startup_joystick_scan(self):
+        """Single scan on startup."""
+        self._joy_scan_current()
 
     def _build_ui(self):
         # ── Header ──
         header = ctk.CTkFrame(self, fg_color="transparent")
         header.pack(fill="x", padx=15, pady=(10,5))
         ctk.CTkLabel(header, text="QCAR Controller", font=("Consolas", 22, "bold")).pack(side="left")
-        ctk.CTkLabel(header, text="WASD/Flechas=Dir  SPACE=Turbo  L=Luces  ESC=Desconectar",
+        ctk.CTkLabel(header, text="X=Acel  ↓=Rev  ←→=Dir  △=Turbo  □=Luces",
                      font=("Consolas", 10), text_color="gray50").pack(side="right")
 
         # ── Main 2-column layout ──
@@ -172,6 +177,8 @@ class QCARApp(ctk.CTk):
         joy_header = ctk.CTkFrame(joy_frame, fg_color="transparent")
         joy_header.pack(fill="x", padx=10, pady=(6,0))
         ctk.CTkLabel(joy_header, text="Gamepad", font=("Consolas", 13, "bold")).pack(side="left")
+        self.joy_bat_label = ctk.CTkLabel(joy_header, text="", font=("Consolas", 11), text_color="gray")
+        self.joy_bat_label.pack(side="right", padx=(10,0))
         self.joy_status_dot = ctk.CTkLabel(joy_header, text="● Desconectado", text_color="red", font=("Consolas", 11))
         self.joy_status_dot.pack(side="right")
 
@@ -259,20 +266,25 @@ class QCARApp(ctk.CTk):
     # ── Joystick Selection ────────────────────────────────────────────────────
 
     def _refresh_joystick_list(self):
-        pygame.joystick.quit()
-        pygame.joystick.init()
-        count = pygame.joystick.get_count()
+        """Scan current pygame joysticks WITHOUT quit/init (BT breaks on reinit)."""
+        self._joy_scan_current()
 
+    def _joy_scan_current(self):
+        count = pygame.joystick.get_count()
+        self._joy_count = count
         names = []
         for i in range(count):
-            j = pygame.joystick.Joystick(i)
-            j.init()
-            names.append(f"{i}: {j.get_name()}")
+            try:
+                j = pygame.joystick.Joystick(i)
+                j.init()
+                names.append(f"{i}: {j.get_name()}")
+            except:
+                pass
 
         if names:
             self.joy_dropdown.configure(values=names)
             self.joy_dropdown.set(names[0])
-            self._select_joystick(0)
+            self._select_joystick_safe(0)
         else:
             self.joy_dropdown.configure(values=["Ninguno - click BT para vincular"])
             self.joy_dropdown.set("Ninguno - click BT para vincular")
@@ -281,60 +293,82 @@ class QCARApp(ctk.CTk):
             self.joy_status_dot.configure(text="● Desconectado", text_color="red")
 
     def _on_joystick_select(self, value):
-        if value.startswith("Ninguno"):
+        if not value or value.startswith("Ninguno"):
             return
-        idx = int(value.split(":")[0])
-        self._select_joystick(idx)
-
-    def _select_joystick(self, idx):
         try:
-            self.joystick = pygame.joystick.Joystick(idx)
-            self.joystick.init()
+            idx = int(value.split(":")[0])
+        except (ValueError, IndexError):
+            return
+        self._select_joystick_safe(idx)
+
+    def _select_joystick_safe(self, idx):
+        try:
+            j = pygame.joystick.Joystick(idx)
+            j.init()
+            self.joystick = j
             self.joystick_index = idx
-            self.joystick_name = self.joystick.get_name()
-            info = f"{self.joystick.get_numbuttons()} botones, {self.joystick.get_numaxes()} ejes, {self.joystick.get_numhats()} hats"
+            self.joystick_name = j.get_name()
+
+            power = j.get_power_level()
+            conn_type = "USB" if power == "wired" else "Bluetooth"
+            info = f"{conn_type} | {j.get_numbuttons()} botones, {j.get_numaxes()} ejes"
             self.joy_info.configure(text=info)
             self.joy_status_dot.configure(text=f"● {self.joystick_name}", text_color="green")
-            self._log(f"Gamepad conectado: {self.joystick_name}")
+            self._log(f"Gamepad: {self.joystick_name} ({conn_type})")
         except Exception as e:
+            self.joystick = None
             self.joy_info.configure(text=f"Error: {e}")
             self.joy_status_dot.configure(text="● Error", text_color="red")
 
     def _open_bt_settings(self):
-        """Open Windows Bluetooth settings to pair a controller."""
         import subprocess
         subprocess.Popen(["explorer", "ms-settings:bluetooth"], shell=True)
         self._log("Abriendo Bluetooth settings...")
 
-    def _check_joystick_connected(self):
-        """Check if current joystick is still connected, auto-refresh if not."""
-        if self.joystick:
-            try:
-                pygame.event.pump()
-                # Try to read - if fails, joystick disconnected
-                self.joystick.get_numbuttons()
-            except:
-                self._log(f"Gamepad desconectado: {self.joystick_name}")
+    def _periodic_joystick_check(self):
+        """Watch for joystick events. NEVER quit/reinit pygame.joystick (kills BT)."""
+        try:
+            count = pygame.joystick.get_count()
+            if count > 0 and not self.joystick:
+                # New joystick appeared
+                self._joy_scan_current()
+            elif count == 0 and self.joystick:
+                # Joystick disappeared
+                self._log("Gamepad desconectado")
                 self.joystick = None
                 self.joy_status_dot.configure(text="● Desconectado", text_color="red")
                 self.joy_info.configure(text="")
-                self._refresh_joystick_list()
-        else:
-            # Check if a new one appeared
-            pygame.joystick.quit()
-            pygame.joystick.init()
-            if pygame.joystick.get_count() > 0:
-                self._refresh_joystick_list()
+                self.joy_dropdown.set("Desconectado")
+                self._joy_count = 0
+                self.joy_bat_label.configure(text="")
 
-    def _periodic_joystick_check(self):
-        """Periodically check if joystick is still connected or new one appeared."""
-        self._check_joystick_connected()
+            # Update gamepad battery
+            if self.joystick:
+                try:
+                    power = self.joystick.get_power_level()
+                    power_map = {
+                        "empty": ("0%", "red"),
+                        "low": ("25%", "red"),
+                        "medium": ("50%", "yellow"),
+                        "full": ("100%", "lime"),
+                        "wired": ("USB", "cyan"),
+                        "max": ("100%", "lime"),
+                    }
+                    text, color = power_map.get(power, (power, "gray"))
+                    self.joy_bat_label.configure(text=f"Bat: {text}", text_color=color)
+                except Exception:
+                    self.joy_bat_label.configure(text="Bat: ??", text_color="gray")
+        except Exception:
+            pass
         self.after(2000, self._periodic_joystick_check)
 
     # ── Gamepad Polling ───────────────────────────────────────────────────────
 
     def _poll_gamepad(self):
-        pygame.event.pump()
+        try:
+            pygame.event.pump()
+        except Exception:
+            pass
 
         # If autopilot is running, skip manual input
         if self.autopilot_running:
@@ -382,10 +416,8 @@ class QCARApp(ctk.CTk):
                     prev = self.prev_buttons.get("lights_toggle", False)
                     if val and not prev: self.lights = not self.lights
                     self.prev_buttons["lights_toggle"] = val
-                elif action == "exit":
-                    if val: self._disconnect_qcar()
-
-            # D-Pad always active
+                # hat type kept for custom mappings
+            # D-Pad via hats (if controller has them)
             for hat_i in range(self.joystick.get_numhats()):
                 hx, hy = self.joystick.get_hat(hat_i)
                 if hy > 0: fwd = True
@@ -450,8 +482,6 @@ class QCARApp(ctk.CTk):
         elif key == "l":
             if not self._kb_lights_prev: self.lights = not self.lights
             self._kb_lights_prev = True
-        elif key == "Escape":
-            self._disconnect_qcar()
 
     def _on_key_release(self, event):
         key = event.keysym
@@ -564,7 +594,7 @@ class QCARApp(ctk.CTk):
         actions = [
             ("forward","Adelante"), ("backward","Reversa"), ("left","Izquierda"), ("right","Derecha"),
             ("turbo_toggle","Toggle Turbo"), ("turbo_hold","Turbo Momentaneo"),
-            ("lights_toggle","Toggle Luces"), ("exit","Salir"),
+            ("lights_toggle","Toggle Luces"),
         ]
 
         frame = ctk.CTkFrame(win)
