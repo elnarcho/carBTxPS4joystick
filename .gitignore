@@ -1,6 +1,7 @@
 bin/
 obj/
 publish/
+release/
 *.pdb
 *.user
 .vs/
