@@ -133,6 +133,7 @@ class QCARApp(ctk.CTk):
         self._refresh_joystick_list()
 
         self.after(16, self._poll_gamepad)
+        self.after(2000, self._periodic_joystick_check)
 
     def _build_ui(self):
         # ── Header ──
@@ -168,13 +169,21 @@ class QCARApp(ctk.CTk):
         # ── Gamepad ──
         joy_frame = ctk.CTkFrame(left)
         joy_frame.pack(fill="x", pady=5)
-        ctk.CTkLabel(joy_frame, text="Gamepad", font=("Consolas", 13, "bold")).pack(anchor="w", padx=10, pady=(6,0))
+        joy_header = ctk.CTkFrame(joy_frame, fg_color="transparent")
+        joy_header.pack(fill="x", padx=10, pady=(6,0))
+        ctk.CTkLabel(joy_header, text="Gamepad", font=("Consolas", 13, "bold")).pack(side="left")
+        self.joy_status_dot = ctk.CTkLabel(joy_header, text="● Desconectado", text_color="red", font=("Consolas", 11))
+        self.joy_status_dot.pack(side="right")
+
         row_joy = ctk.CTkFrame(joy_frame, fg_color="transparent")
         row_joy.pack(fill="x", padx=10, pady=3)
-        self.joy_dropdown = ctk.CTkComboBox(row_joy, values=["Ninguno"], width=380,
+        self.joy_dropdown = ctk.CTkComboBox(row_joy, values=["Ninguno"], width=340,
                                              command=self._on_joystick_select, state="readonly")
-        self.joy_dropdown.pack(side="left", padx=(0,5))
-        ctk.CTkButton(row_joy, text="↻", command=self._refresh_joystick_list, width=32, height=28).pack(side="left")
+        self.joy_dropdown.pack(side="left", padx=(0,3))
+        ctk.CTkButton(row_joy, text="↻", command=self._refresh_joystick_list, width=32, height=28).pack(side="left", padx=2)
+        ctk.CTkButton(row_joy, text="BT", command=self._open_bt_settings, width=32, height=28,
+                      fg_color="gray30", hover_color="gray40").pack(side="left", padx=2)
+
         self.joy_info = ctk.CTkLabel(joy_frame, text="", font=("Consolas", 10), text_color="gray")
         self.joy_info.pack(anchor="w", padx=10)
         self.btn_map = ctk.CTkButton(joy_frame, text="Configurar Mapeo de Botones", command=self._open_mapping, height=30)
@@ -265,10 +274,11 @@ class QCARApp(ctk.CTk):
             self.joy_dropdown.set(names[0])
             self._select_joystick(0)
         else:
-            self.joy_dropdown.configure(values=["Ninguno detectado"])
-            self.joy_dropdown.set("Ninguno detectado")
+            self.joy_dropdown.configure(values=["Ninguno - click BT para vincular"])
+            self.joy_dropdown.set("Ninguno - click BT para vincular")
             self.joystick = None
             self.joy_info.configure(text="")
+            self.joy_status_dot.configure(text="● Desconectado", text_color="red")
 
     def _on_joystick_select(self, value):
         if value.startswith("Ninguno"):
@@ -284,9 +294,42 @@ class QCARApp(ctk.CTk):
             self.joystick_name = self.joystick.get_name()
             info = f"{self.joystick.get_numbuttons()} botones, {self.joystick.get_numaxes()} ejes, {self.joystick.get_numhats()} hats"
             self.joy_info.configure(text=info)
-            self._log(f"Gamepad seleccionado: {self.joystick_name}")
+            self.joy_status_dot.configure(text=f"● {self.joystick_name}", text_color="green")
+            self._log(f"Gamepad conectado: {self.joystick_name}")
         except Exception as e:
             self.joy_info.configure(text=f"Error: {e}")
+            self.joy_status_dot.configure(text="● Error", text_color="red")
+
+    def _open_bt_settings(self):
+        """Open Windows Bluetooth settings to pair a controller."""
+        import subprocess
+        subprocess.Popen(["explorer", "ms-settings:bluetooth"], shell=True)
+        self._log("Abriendo Bluetooth settings...")
+
+    def _check_joystick_connected(self):
+        """Check if current joystick is still connected, auto-refresh if not."""
+        if self.joystick:
+            try:
+                pygame.event.pump()
+                # Try to read - if fails, joystick disconnected
+                self.joystick.get_numbuttons()
+            except:
+                self._log(f"Gamepad desconectado: {self.joystick_name}")
+                self.joystick = None
+                self.joy_status_dot.configure(text="● Desconectado", text_color="red")
+                self.joy_info.configure(text="")
+                self._refresh_joystick_list()
+        else:
+            # Check if a new one appeared
+            pygame.joystick.quit()
+            pygame.joystick.init()
+            if pygame.joystick.get_count() > 0:
+                self._refresh_joystick_list()
+
+    def _periodic_joystick_check(self):
+        """Periodically check if joystick is still connected or new one appeared."""
+        self._check_joystick_connected()
+        self.after(2000, self._periodic_joystick_check)
 
     # ── Gamepad Polling ───────────────────────────────────────────────────────
 
