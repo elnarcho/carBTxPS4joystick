@@ -2,6 +2,10 @@ bin/
 obj/
 publish/
 release/
+dist/
+build/
 *.pdb
 *.user
+*.spec
 .vs/
+__pycache__/

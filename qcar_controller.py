@@ -96,7 +96,7 @@ class QCARApp(ctk.CTk):
         super().__init__()
 
         self.title("QCAR Controller")
-        self.geometry("750x820")
+        self.geometry("1100x620")
         self.resizable(False, False)
         ctk.set_appearance_mode("dark")
         ctk.set_default_color_theme("blue")
@@ -137,94 +137,102 @@ class QCARApp(ctk.CTk):
     def _build_ui(self):
         # ── Header ──
         header = ctk.CTkFrame(self, fg_color="transparent")
-        header.pack(fill="x", padx=15, pady=(15,5))
-        ctk.CTkLabel(header, text="QCAR Controller", font=("Consolas", 24, "bold")).pack(side="left")
+        header.pack(fill="x", padx=15, pady=(10,5))
+        ctk.CTkLabel(header, text="QCAR Controller", font=("Consolas", 22, "bold")).pack(side="left")
+        ctk.CTkLabel(header, text="WASD/Flechas=Dir  SPACE=Turbo  L=Luces  ESC=Desconectar",
+                     font=("Consolas", 10), text_color="gray50").pack(side="right")
 
-        # ── Connection Frame ──
-        conn_frame = ctk.CTkFrame(self)
-        conn_frame.pack(fill="x", padx=15, pady=5)
-        ctk.CTkLabel(conn_frame, text="QCAR (BLE)", font=("Consolas", 14, "bold")).pack(anchor="w", padx=10, pady=(8,0))
+        # ── Main 2-column layout ──
+        main = ctk.CTkFrame(self, fg_color="transparent")
+        main.pack(fill="both", expand=True, padx=10, pady=5)
+        main.grid_columnconfigure(0, weight=1)
+        main.grid_columnconfigure(1, weight=1)
 
+        # ════ LEFT COLUMN ════
+        left = ctk.CTkFrame(main, fg_color="transparent")
+        left.grid(row=0, column=0, sticky="nsew", padx=5)
+
+        # ── Connection ──
+        conn_frame = ctk.CTkFrame(left)
+        conn_frame.pack(fill="x", pady=(0,5))
+        ctk.CTkLabel(conn_frame, text="QCAR (BLE)", font=("Consolas", 13, "bold")).pack(anchor="w", padx=10, pady=(6,0))
         row1 = ctk.CTkFrame(conn_frame, fg_color="transparent")
-        row1.pack(fill="x", padx=10, pady=5)
+        row1.pack(fill="x", padx=10, pady=3)
         self.ble_status = ctk.CTkLabel(row1, text="● Desconectado", text_color="red", font=("Consolas", 12))
         self.ble_status.pack(side="left")
         self.bat_label = ctk.CTkLabel(row1, text="Bat: ??", font=("Consolas", 12))
         self.bat_label.pack(side="right")
-        self.btn_connect = ctk.CTkButton(conn_frame, text="Conectar QCAR", command=self._connect_qcar, height=32)
-        self.btn_connect.pack(padx=10, pady=(0,8), fill="x")
+        self.btn_connect = ctk.CTkButton(conn_frame, text="Conectar QCAR", command=self._connect_qcar, height=30)
+        self.btn_connect.pack(padx=10, pady=(0,6), fill="x")
 
-        # ── Joystick Frame ──
-        joy_frame = ctk.CTkFrame(self)
-        joy_frame.pack(fill="x", padx=15, pady=5)
-        ctk.CTkLabel(joy_frame, text="Gamepad", font=("Consolas", 14, "bold")).pack(anchor="w", padx=10, pady=(8,0))
-
+        # ── Gamepad ──
+        joy_frame = ctk.CTkFrame(left)
+        joy_frame.pack(fill="x", pady=5)
+        ctk.CTkLabel(joy_frame, text="Gamepad", font=("Consolas", 13, "bold")).pack(anchor="w", padx=10, pady=(6,0))
         row_joy = ctk.CTkFrame(joy_frame, fg_color="transparent")
-        row_joy.pack(fill="x", padx=10, pady=5)
-
-        self.joy_dropdown = ctk.CTkComboBox(row_joy, values=["Ninguno"], width=400,
+        row_joy.pack(fill="x", padx=10, pady=3)
+        self.joy_dropdown = ctk.CTkComboBox(row_joy, values=["Ninguno"], width=380,
                                              command=self._on_joystick_select, state="readonly")
         self.joy_dropdown.pack(side="left", padx=(0,5))
-        ctk.CTkButton(row_joy, text="↻", command=self._refresh_joystick_list, width=35, height=28).pack(side="left")
-
-        self.joy_info = ctk.CTkLabel(joy_frame, text="", font=("Consolas", 11), text_color="gray")
+        ctk.CTkButton(row_joy, text="↻", command=self._refresh_joystick_list, width=32, height=28).pack(side="left")
+        self.joy_info = ctk.CTkLabel(joy_frame, text="", font=("Consolas", 10), text_color="gray")
         self.joy_info.pack(anchor="w", padx=10)
-
-        self.btn_map = ctk.CTkButton(joy_frame, text="Configurar Mapeo de Botones", command=self._open_mapping, height=32)
-        self.btn_map.pack(padx=10, pady=(2,8), fill="x")
+        self.btn_map = ctk.CTkButton(joy_frame, text="Configurar Mapeo de Botones", command=self._open_mapping, height=30)
+        self.btn_map.pack(padx=10, pady=(2,6), fill="x")
 
         # ── Visual Control ──
-        ctrl_frame = ctk.CTkFrame(self)
-        ctrl_frame.pack(fill="x", padx=15, pady=5)
-        ctk.CTkLabel(ctrl_frame, text="Control", font=("Consolas", 14, "bold")).pack(anchor="w", padx=10, pady=(8,0))
+        ctrl_frame = ctk.CTkFrame(left)
+        ctrl_frame.pack(fill="x", pady=5)
+        ctk.CTkLabel(ctrl_frame, text="Control", font=("Consolas", 13, "bold")).pack(anchor="w", padx=10, pady=(6,0))
 
-        dir_frame = ctk.CTkFrame(ctrl_frame, fg_color="transparent")
-        dir_frame.pack(pady=8)
+        ctrl_inner = ctk.CTkFrame(ctrl_frame, fg_color="transparent")
+        ctrl_inner.pack(fill="x", padx=10, pady=5)
 
+        # Direction arrows (left side)
+        dir_frame = ctk.CTkFrame(ctrl_inner, fg_color="transparent")
+        dir_frame.pack(side="left", padx=(10,20))
         self.dir_labels = {}
         for r, c, key, txt in [(0,1,"fwd","▲"),(1,0,"lft","◄"),(1,1,"center","●"),(1,2,"rgt","►"),(2,1,"bwd","▼")]:
-            lbl = ctk.CTkLabel(dir_frame, text=txt, font=("Consolas", 28), width=50, height=50, text_color="gray40")
-            lbl.grid(row=r, column=c, padx=3, pady=3)
+            lbl = ctk.CTkLabel(dir_frame, text=txt, font=("Consolas", 26), width=45, height=45, text_color="gray40")
+            lbl.grid(row=r, column=c, padx=2, pady=2)
             self.dir_labels[key] = lbl
 
-        status_row = ctk.CTkFrame(ctrl_frame, fg_color="transparent")
-        status_row.pack(pady=(0,8))
-        self.turbo_label = ctk.CTkLabel(status_row, text="NORMAL 80%", font=("Consolas", 14, "bold"), text_color="gray")
-        self.turbo_label.pack(side="left", padx=15)
-        self.lights_label = ctk.CTkLabel(status_row, text="Luces: ON", font=("Consolas", 14), text_color="yellow")
-        self.lights_label.pack(side="left", padx=15)
-        self.dir_text = ctk.CTkLabel(status_row, text="IDLE", font=("Consolas", 14), text_color="gray")
-        self.dir_text.pack(side="left", padx=15)
+        # Status (right of arrows)
+        status_col = ctk.CTkFrame(ctrl_inner, fg_color="transparent")
+        status_col.pack(side="left", fill="y", pady=5)
+        self.dir_text = ctk.CTkLabel(status_col, text="IDLE", font=("Consolas", 18, "bold"), text_color="gray")
+        self.dir_text.pack(anchor="w", pady=(5,3))
+        self.turbo_label = ctk.CTkLabel(status_col, text="NORMAL 80%", font=("Consolas", 14, "bold"), text_color="gray")
+        self.turbo_label.pack(anchor="w", pady=2)
+        self.lights_label = ctk.CTkLabel(status_col, text="Luces: ON", font=("Consolas", 14), text_color="yellow")
+        self.lights_label.pack(anchor="w", pady=2)
 
-        # ── Autopilot Frame ──
-        auto_frame = ctk.CTkFrame(self)
-        auto_frame.pack(fill="x", padx=15, pady=5)
-        ctk.CTkLabel(auto_frame, text="Piloto Automatico", font=("Consolas", 14, "bold")).pack(anchor="w", padx=10, pady=(8,0))
+        # ════ RIGHT COLUMN ════
+        right = ctk.CTkFrame(main, fg_color="transparent")
+        right.grid(row=0, column=1, sticky="nsew", padx=5)
 
+        # ── Autopilot ──
+        auto_frame = ctk.CTkFrame(right)
+        auto_frame.pack(fill="x", pady=(0,5))
+        ctk.CTkLabel(auto_frame, text="Piloto Automatico", font=("Consolas", 13, "bold")).pack(anchor="w", padx=10, pady=(6,0))
         auto_btns = ctk.CTkFrame(auto_frame, fg_color="transparent")
         auto_btns.pack(fill="x", padx=10, pady=5)
         self.btn_circuit = ctk.CTkButton(auto_btns, text="Editor de Circuito", command=self._open_circuit_editor,
-                                          height=32, width=200)
+                                          height=30, width=200)
         self.btn_circuit.pack(side="left", padx=(0,5))
         self.btn_autopilot = ctk.CTkButton(auto_btns, text="▶ Iniciar", command=self._toggle_autopilot,
-                                            height=32, width=120, fg_color="green", hover_color="darkgreen")
+                                            height=30, width=110, fg_color="green", hover_color="darkgreen")
         self.btn_autopilot.pack(side="left", padx=5)
         self.btn_stop_auto = ctk.CTkButton(auto_btns, text="■ Parar", command=self._stop_autopilot,
-                                            height=32, width=100, fg_color="red", hover_color="darkred")
+                                            height=30, width=90, fg_color="red", hover_color="darkred")
         self.btn_stop_auto.pack(side="left", padx=5)
-
         self.auto_status = ctk.CTkLabel(auto_frame, text="Sin circuito cargado", font=("Consolas", 11), text_color="gray")
-        self.auto_status.pack(anchor="w", padx=10, pady=(0,8))
-
-        # ── Keyboard info ──
-        kb_frame = ctk.CTkFrame(self)
-        kb_frame.pack(fill="x", padx=15, pady=5)
-        ctk.CTkLabel(kb_frame, text="WASD/Flechas=Dir  SPACE=Turbo  L=Luces  ESC=Desconectar",
-                     font=("Consolas", 11), text_color="gray").pack(padx=10, pady=5)
+        self.auto_status.pack(anchor="w", padx=10, pady=(0,6))
 
         # ── Log ──
-        self.log_text = ctk.CTkTextbox(self, height=70, font=("Consolas", 11))
-        self.log_text.pack(fill="x", padx=15, pady=(5,15))
+        ctk.CTkLabel(right, text="Log", font=("Consolas", 13, "bold")).pack(anchor="w", padx=5, pady=(5,0))
+        self.log_text = ctk.CTkTextbox(right, height=350, font=("Consolas", 11))
+        self.log_text.pack(fill="both", expand=True, padx=0, pady=(3,0))
         self._log("Listo. Conecta un gamepad y el QCAR.")
 
         # Keyboard binds
